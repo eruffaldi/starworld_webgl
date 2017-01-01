@@ -26,6 +26,7 @@
     <script src="vox.min.js"></script>
     <script src="OutlinePass.js"></script>
     <script src="ClearPass.js"></script>
+    <script src="virtualjoystick.js"></script>
     <script src="RenderPass.js"></script>
     <script src="Timer.js"></script>
     <script src="KeyboardState.js"></script>
@@ -210,6 +211,13 @@
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 10000);
         camera.position.z = 30;
 
+        camera2 = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera2.position.z = 5;
+        camera2.position.y = 3;
+        camera2.up = new THREE.Vector3(0,1,0);
+        camera2.lookAt(new THREE.Vector3(0,0,0));
+        //camera2.rotateOnAxis(new THREE.Vector3(1,0,0),-0.4) //-Math.PI/3)
+
         controls = new THREE.TrackballControls(camera);
         controls.rotateSpeed = 4.0;
         controls.zoomSpeed = 1.2;
@@ -227,25 +235,25 @@
         base = new THREE.Object3D();
 
         var light = new THREE.SpotLight(0xffffff, 1);
-        light.position.set(20, 0, 0)
+        light.position.set(180, 0, 0)
         light.castShadow = true
         light.angle = Math.PI / 4;
         light.shadow.mapSize.width = 1024;
         light.shadow.mapSize.height = 1024;
         light.shadow.camera.near = 1;
-        light.shadow.camera.far = 200;
+        light.shadow.camera.far = 100;
 
 
         scene.add(light);
 
         var light = new THREE.SpotLight(0xffffff, 1);
-        light.position.set(-20, 10, 0)
+        light.position.set(-180, 80, 0)
         light.castShadow = true
         light.angle = Math.PI / 4;
         light.shadow.mapSize.width = 1024;
         light.shadow.mapSize.height = 1024;
         light.shadow.camera.near = 1;
-        light.shadow.camera.far = 200;
+        light.shadow.camera.far = 100;
         scene.add(light);
 
         function getRandomInt(min, max) {
@@ -256,11 +264,25 @@
             return a[getRandomInt(0, a.length - 1)]
         }
 
-        var geometry = new THREE.SphereGeometry( 5, 32, 32 );
-        var material = new THREE.MeshPhongMaterial( {color: 0xffff00} );
-         sphere = new THREE.Mesh( geometry, material );
-         sphere.receiveShadow = true
-         sphere.castShadow = false
+        sphere = new THREE.Object3D()
+        var loader = new THREE.TextureLoader();
+                loader.load( 'land_ocean_ice_cloud_2048.jpg', function ( texture ) 
+                {
+                    var geometry = new THREE.SphereGeometry( 50, 64, 64 );
+                    var material = new THREE.MeshBasicMaterial( { map: texture, overdraw: 0.5 })
+                    var mesh = new THREE.Mesh( geometry, material );
+                     mesh.receiveShadow = true
+                     mesh.castShadow = false
+                    sphere.add( mesh );
+
+
+                } );
+
+
+ //       var geometry = new THREE.SphereGeometry( 50, 64, 32 );
+      //  var material = new THREE.MeshPhongMaterial( {color: 0xffff00} );
+   //     var material = new THREE.MeshBasicMaterial( { map: texture, overdraw: 0.5 } );
+     //    sphere = new THREE.Mesh( geometry, material );
         scene.add( sphere );
 
         // motion is along Z
@@ -275,20 +297,25 @@
             var builder = new vox.MeshBuilder(voxelData, param);
             var mesh = builder.createMesh();  
      //       var material = new THREE.MeshPhongMaterial( {color: 0x0000ff} );
-             mesh.rotateOnAxis(new THREE.Vector3(0,0,1),Math.PI/2)
              mesh.castShadow = true;
              mesh.receiveShadow = false
-            ship.add(mesh)
+             ship.mesh = mesh
+             shipfix.add(mesh)
         });
 
   
         ship = new THREE.Object3D()
+        shipfix = new THREE.Object3D()
+        shipfix.rotateOnAxis(new THREE.Vector3(0,0,1),-Math.PI/2)
+
         // at startup normal and position should be at least not coincident
-        ship.position.set(7,0,0)
+        ship.position.set(55,0,0)
         ship.speed = 0.01
         ship.normal = new THREE.Vector3(0,1,0)
         ship.dtheta = 0
         ship.drho = 0
+        ship.add(shipfix)
+        shipfix.add(camera2);
         scene.add( ship );
 
         var objects = []
@@ -332,6 +359,16 @@
 
         keyboard = new THREEx.KeyboardState();
 
+        joystick    = new VirtualJoystick({
+                container   : container,
+                mouseSupport    : true,
+            });
+            joystick.addEventListener('touchStart', function(){
+
+            })
+            joystick.addEventListener('touchEnd', function(){
+            })
+
 
     }
 
@@ -343,6 +380,8 @@
 
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
+        camera2.aspect = window.innerWidth / window.innerHeight;
+        camera2.updateProjectionMatrix();
 
         renderer.setSize(width, height);
         //composer.setSize(width, height);
@@ -378,10 +417,6 @@
 
     function updateBody(body,dt)
     {
-        // .normal
-        // .speed
-        // .dtheta
-
         var origin = sphere.position
         var d = body.position.sub(origin);
         var rho = d.length()
@@ -401,6 +436,19 @@
             // rotate along X by the given angle
             m.makeRotationX(body.dtheta*dt);
             frame.multiply(m)
+            if(body.mesh)
+            {
+                body.mesh.quaternion.set(0,0,0,1)
+                body.mesh.rotateOnAxis(new THREE.Vector3(0,0,1),(body.dtheta>0?1.0:-1.0)*Math.PI/4)
+            }
+        }
+        else
+        {
+            if(body.mesh)
+            {
+                body.mesh.quaternion.set(0,0,0,1)
+            }
+
         }
 
         // stored by column => extract Y == normal
@@ -411,31 +459,39 @@
 
     function animate(time) {
 
+        var dtheta = 0.002
+        var drho  = 0.02
+        ship.dtheta = 0.0
+        ship.drho = 0.0
         if( keyboard.pressed("A"))
         {
-            ship.dtheta = 0.01
+            ship.dtheta = dtheta
         }
         else if( keyboard.pressed("S"))
         {
-            ship.dtheta = -0.01
-        }
-        else
-        {
-            ship.dtheta = 0.0
+            ship.dtheta = -dtheta
         }
 
         if( keyboard.pressed("Q"))
         {
-            ship.drho = 0.02
+            ship.drho = drho
         }
         else if( keyboard.pressed("W"))
         {
-            ship.drho = -0.02
+            ship.drho = -drho
         }
-        else
+
+        var dx = joystick.deltaX()
+        if(joystick.right())
         {
-            ship.drho = 0.0
+            ship.dtheta = -dtheta
         }
+        else if(joystick.left())
+        {
+            ship.dtheta = dtheta
+        }
+
+//                    + ' dy:'+joystick.deltaY()
 
         requestAnimationFrame(animate);
 
@@ -458,7 +514,7 @@
     function render() {
         //composer.render();
         renderer.clear();
-        renderer.render( scene, camera );
+        renderer.render( scene, camera2 );
     }
     </script>
 </body>
