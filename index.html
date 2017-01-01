@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Merry Christimas 2016</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+    body {
+        font-family: Monospace;
+        background-color: #000000;
+        margin: 0px;
+        overflow: hidden;
+    }
+    </style>
+</head>
+
+<body>
+    <script src="three.min.js"></script>
+    <script src="DragControls.js"></script>
+    <script src="CCapture.all.min.js"></script>
+    <script src="TrackballControls.js"></script>
+    <script src="EffectComposer.js"></script>
+    <script src="ShaderPass.js"></script>
+    <script src="CopyShader.js"></script>
+    <script src="vox.min.js"></script>
+    <script src="OutlinePass.js"></script>
+    <script src="ClearPass.js"></script>
+    <script src="RenderPass.js"></script>
+    <script src="Timer.js"></script>
+    <script src="KeyboardState.js"></script>
+    <script src="stats.min.js"></script>
+    <script>
+    THREE.ShaderTypes = {
+
+        'phongDiffuse': {
+
+            uniforms: {
+
+                "uDirLightPos": {
+                    type: "v3",
+                    value: new THREE.Vector3()
+                },
+                "uDirLightColor": {
+                    type: "c",
+                    value: new THREE.Color(0xffffff)
+                },
+
+                "uMaterialColor": {
+                    type: "c",
+                    value: new THREE.Color(0xffffff)
+                },
+
+                uKd: {
+                    type: "f",
+                    value: 0.7
+                },
+                uBorder: {
+                    type: "f",
+                    value: 0.4
+                }
+            },
+
+            vertexShader: [
+
+                "varying vec3 vNormal;",
+                "varying vec3 vViewPosition;",
+
+                "void main() {",
+
+                "gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );",
+                "vNormal = normalize( normalMatrix * normal );",
+                "vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );",
+                "vViewPosition = -mvPosition.xyz;",
+
+                "}"
+
+            ].join("\n"),
+
+            fragmentShader: [
+
+                "uniform vec3 uMaterialColor;",
+
+                "uniform vec3 uDirLightPos;",
+                "uniform vec3 uDirLightColor;",
+
+                "uniform float uKd;",
+                "uniform float uBorder;",
+
+                "varying vec3 vNormal;",
+                "varying vec3 vViewPosition;",
+
+                "void main() {",
+
+                // compute direction to light
+                "vec4 lDirection = viewMatrix * vec4( uDirLightPos, 0.0 );",
+                "vec3 lVector = normalize( lDirection.xyz );",
+
+                // diffuse: N * L. Normal must be normalized, since it's interpolated.
+                "vec3 normal = normalize( vNormal );",
+                //was: "float diffuse = max( dot( normal, lVector ), 0.0);",
+                // solution
+                "float diffuse = dot( normal, lVector );",
+                "if ( diffuse > 0.6 ) { diffuse = 1.0; }",
+                "else if ( diffuse > -0.2 ) { diffuse = 0.7; }",
+                "else { diffuse = 0.3; }",
+
+                "gl_FragColor = vec4( uKd * uMaterialColor * uDirLightColor * diffuse, 1.0 );",
+
+                "}"
+
+            ].join("\n")
+
+        }
+
+    };
+
+    /**
+     * LOGO Syntax
+
+     pen color: Ccolor
+     	color codes: bwrypck
+     size: S#,#
+     write: .
+     move: [X|Y|Z]#
+     directions [UDLRFB] lower moves half
+     pushpop position stack: [Pp]#
+
+     */
+    
+    var controls;
+    var timer = new Timer();
+    var slots = {}
+    var container, stats;
+    var camera, scene, raycaster, renderer, composer;
+
+    var mouse = new THREE.Vector2(),
+        INTERSECTED;
+    var radius = 20,
+        theta = 0;
+
+    init();
+    animate();
+
+    function createShaderMaterial(id, light) {
+
+        var shader = THREE.ShaderTypes[id];
+
+        var u = THREE.UniformsUtils.clone(shader.uniforms);
+
+        var vs = shader.vertexShader;
+        var fs = shader.fragmentShader;
+
+        var material = new THREE.ShaderMaterial({
+            uniforms: u,
+            vertexShader: vs,
+            fragmentShader: fs
+        });
+
+        material.uniforms.uDirLightPos.value = light.position;
+        material.uniforms.uDirLightColor.value = light.color;
+
+        return material;
+
+    }
+
+
+    function init() {
+
+
+        container = document.createElement('div');
+        document.body.appendChild(container);
+
+        control = new function () {
+                    this.rotationSpeed = 0.005;
+                    this.scale = 1;
+                    this.saveMovie = function () {
+                        var videoUrl = capturer.save();
+                        var link = document.createElement("a");
+                        link.download = 'video.gif';
+                        link.href = videoUrl;
+                        link.click();
+                    };
+                };
+        //addControls(control);
+
+        // capture code
+        capturer = new CCapture({
+            framerate: 20,
+            format: "gif",
+            workersPath: 'js/',
+            verbose: true
+        });
+        // capturer.start();
+
+        function addControls(controlObject) 
+        {
+            var gui = new dat.GUI();
+            gui.add(controlObject, 'saveMovie');
+        }
+
+        var info = document.createElement('div');
+        info.style.position = 'absolute';
+        info.style.top = '10px';
+        info.style.width = '100%';
+        info.style.textAlign = 'center';
+        info.innerHTML = 'Star World';
+        container.appendChild(info);
+
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.z = 30;
+
+        controls = new THREE.TrackballControls(camera);
+        controls.rotateSpeed = 4.0;
+        controls.zoomSpeed = 1.2;
+        controls.panSpeed = 0.8;
+        controls.noZoom = false;
+        controls.noPan = false;
+        controls.staticMoving = true;
+        controls.dynamicDampingFactor = 0.3;
+        controls.keys = [65, 83, 68];
+        controls.addEventListener('change', render);
+
+
+
+        scene = new THREE.Scene();
+        base = new THREE.Object3D();
+
+        var light = new THREE.SpotLight(0xffffff, 1);
+        light.position.set(20, 0, 0)
+        light.castShadow = true
+        light.angle = Math.PI / 4;
+        light.shadow.mapSize.width = 1024;
+        light.shadow.mapSize.height = 1024;
+        light.shadow.camera.near = 1;
+        light.shadow.camera.far = 200;
+
+
+        scene.add(light);
+
+        var light = new THREE.SpotLight(0xffffff, 1);
+        light.position.set(-20, 10, 0)
+        light.castShadow = true
+        light.angle = Math.PI / 4;
+        light.shadow.mapSize.width = 1024;
+        light.shadow.mapSize.height = 1024;
+        light.shadow.camera.near = 1;
+        light.shadow.camera.far = 200;
+        scene.add(light);
+
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function getRandomArrayItem(a) {
+            return a[getRandomInt(0, a.length - 1)]
+        }
+
+        var geometry = new THREE.SphereGeometry( 5, 32, 32 );
+        var material = new THREE.MeshPhongMaterial( {color: 0xffff00} );
+         sphere = new THREE.Mesh( geometry, material );
+         sphere.receiveShadow = true
+         sphere.castShadow = false
+        scene.add( sphere );
+
+        // motion is along Z
+        //var geometry = new THREE.BoxBufferGeometry(1.0, 1.0, 2.0);
+        //geometry.computeBoundingBox();
+        //geometry.center();
+
+        var parser = new vox.Parser();
+        parser.parse("./tie.vox").then(function(voxelData) {
+            console.log("parsed")
+            var param = { voxelSize: 0.1 };
+            var builder = new vox.MeshBuilder(voxelData, param);
+            var mesh = builder.createMesh();  
+     //       var material = new THREE.MeshPhongMaterial( {color: 0x0000ff} );
+             mesh.rotateOnAxis(new THREE.Vector3(0,0,1),Math.PI/2)
+             mesh.castShadow = true;
+             mesh.receiveShadow = false
+            ship.add(mesh)
+        });
+
+  
+        ship = new THREE.Object3D()
+        // at startup normal and position should be at least not coincident
+        ship.position.set(7,0,0)
+        ship.speed = 0.01
+        ship.normal = new THREE.Vector3(0,1,0)
+        ship.dtheta = 0
+        ship.drho = 0
+        scene.add( ship );
+
+        var objects = []
+            //console.log(cmds)
+        var pos = [0, 0, 0]
+        var aslots = {}
+        var size = [1, 1, 1]
+        var pendown = false
+        var current = base
+        
+        scene.updateMatrixWorld ()
+
+        var intervalId;
+        intervalId = timer.setInterval(function() {
+                timer.clearInterval(intervalId)
+        }, 100);
+
+        raycaster = new THREE.Raycaster();
+
+        renderer = new THREE.WebGLRenderer();
+        renderer.setClearColor(0x777777, 1.0); // overridden by renderpass if 
+        renderer.autoClear = true
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true
+        renderer.shadowMap.type = THREE.PCFShadowMap;
+
+        renderer.sortObjects = false;
+        container.appendChild(renderer.domElement);
+
+        //composer = new THREE.EffectComposer(renderer);
+
+        //var renderPass = new THREE.RenderPass(scene, camera)
+        //renderPass.renderToScreen = true;
+        //composer.addPass(renderPass);
+
+        stats = new Stats();
+        container.appendChild(stats.dom);
+
+        window.addEventListener('resize', onWindowResize, false);
+
+        keyboard = new THREEx.KeyboardState();
+
+
+    }
+
+    function onWindowResize() {
+
+        var width = window.innerWidth || 1;
+        var height = window.innerHeight || 1;
+        var devicePixelRatio = window.devicePixelRatio || 1;
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(width, height);
+        //composer.setSize(width, height);
+
+    }
+
+    function onDocumentMouseMove(event) {
+
+        event.preventDefault();
+
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    }
+
+    //
+    var lasttime;
+    var rdir = 1.0
+    var maxval = 80*Math.PI/180.0
+    var minval = -30*Math.PI/180.0
+
+    /// makes frame, assuming x is preserved
+    /// assume normalized
+    function makeframe(x,y)
+    {
+        var z = new THREE.Vector3()
+        z.crossVectors(x,y)
+        y.crossVectors(z,x)
+        var m= new THREE.Matrix4()
+        m.set(x.x,y.x,z.x,0,x.y,y.y,z.y,0,x.z,y.z,z.z,0,  0,0,0,1.0);
+        return m
+    }
+
+    function updateBody(body,dt)
+    {
+        // .normal
+        // .speed
+        // .dtheta
+
+        var origin = sphere.position
+        var d = body.position.sub(origin);
+        var rho = d.length()
+        rho += body.drho
+        d.normalize()
+        var frame = makeframe(d,body.normal); // X r, Y body => Z new
+        var m = new THREE.Matrix4()
+        m.makeRotationY(dt*body.speed/rho);
+        frame.multiply(m)
+        
+
+        // stored by column => extract X == rho
+        body.position.set(origin.x+frame.elements[0]*rho,origin.y+frame.elements[1]*rho,origin.x+frame.elements[2]*rho)
+
+        if(body.dtheta != 0)
+        {
+            // rotate along X by the given angle
+            m.makeRotationX(body.dtheta*dt);
+            frame.multiply(m)
+        }
+
+        // stored by column => extract Y == normal
+        body.normal.set(frame.elements[4],frame.elements[5],frame.elements[6])
+
+        body.quaternion.setFromRotationMatrix(frame)
+    }
+
+    function animate(time) {
+
+        if( keyboard.pressed("A"))
+        {
+            ship.dtheta = 0.01
+        }
+        else if( keyboard.pressed("S"))
+        {
+            ship.dtheta = -0.01
+        }
+        else
+        {
+            ship.dtheta = 0.0
+        }
+
+        if( keyboard.pressed("Q"))
+        {
+            ship.drho = 0.02
+        }
+        else if( keyboard.pressed("W"))
+        {
+            ship.drho = -0.02
+        }
+        else
+        {
+            ship.drho = 0.0
+        }
+
+        requestAnimationFrame(animate);
+
+        capturer.capture(renderer.domElement);
+        render();
+
+        controls.update();
+        stats.update();
+
+        if (lasttime) {
+            delta = time - lasttime
+            timer.update(delta);
+
+            updateBody(ship,delta)
+
+        }
+        lasttime = time
+    }
+
+    function render() {
+        //composer.render();
+        renderer.clear();
+        renderer.render( scene, camera );
+    }
+    </script>
+</body>
+
+</html>
