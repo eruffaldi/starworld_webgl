@@ -18,10 +18,19 @@
 <body>
 <!--
 Thanks to:
+- http://www.celestiamotherlode.net/catalog/show_addon_details.php?addon_id=1625
+-- http://www.greentoken.de/onlineconv/
 - http://learningthreejs.com/blog/2013/09/16/how-to-make-the-earth-in-webgl/
 - https://blog.sketchfab.com/tutorial-creating-a-3d-star-wars-scene-in-voxels-using-magicavoxel-blender-and-voxelshop/
 - https://github.com/jeromeetienne/threex.planets
+- http://www.theforce.net/fanfilms/postproduction/soundfx/
 -->
+    <audio id="fire" >
+        <source src="tiefire.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="explosion" >
+        <source src="explosion.mp3" type="audio/mpeg">
+    </audio>
     <script src="three.min.js"></script>
     <script src="DragControls.js"></script>
     <script src="CCapture.all.min.js"></script>
@@ -36,6 +45,7 @@ Thanks to:
     <script src="RenderPass.js"></script>
     <script src="Timer.js"></script>
     <script src="KeyboardState.js"></script>
+    <script src="ColladaLoader.js"></script>
     <script src="stats.min.js"></script>
     <script>
     THREE.ShaderTypes = {
@@ -239,7 +249,9 @@ Thanks to:
 
         scene = new THREE.Scene();
         base = new THREE.Object3D();
-
+        // for inspectpr
+        window.scene = scene;
+        window.THREE = THREE
         var light = new THREE.SpotLight(0xffffff, 1);
         light.position.set(180, 0, 0)
         light.castShadow = true
@@ -248,7 +260,6 @@ Thanks to:
         light.shadow.mapSize.height = 1024;
         light.shadow.camera.near = 1;
         light.shadow.camera.far = 100;
-
 
         scene.add(light);
 
@@ -270,46 +281,90 @@ Thanks to:
             return a[getRandomInt(0, a.length - 1)]
         }
 
-        var material =  new THREE.MeshBasicMaterial( {color: 0x880000} );
+        // ray
+        {
+            var material =  new THREE.MeshBasicMaterial( {color: 0x880000} );
+            var geometry = new THREE.CylinderBufferGeometry( 0.05,0.05, 1.0, 64 );
+            geometry.rotateX(Math.PI/2)
+            linebase = { material: material, geometry: geometry }
+        }
 
-        var geometry = new THREE.CylinderBufferGeometry( 0.05,0.05, 1.0, 64 );
-        geometry.rotateX(Math.PI/2)
-        linebase = { material: material, geometry: geometry }
-
-        var geometry  = new THREE.SphereGeometry(200, 32, 32)
-        // create the material, using a texture of startfield
-        var material  = new THREE.MeshBasicMaterial()
-        material.map   = THREE.ImageUtils.loadTexture('galaxy_starfield.png') // starfield_background-1024x770.jpg')
-        material.side  = THREE.BackSide
-        // create the mesh based on geometry and material
-        var mesh  = new THREE.Mesh(geometry, material)
-        scene.add(mesh)
-
+        var spaceradius = 200
         sphere = new THREE.Object3D()
         sphere.radius = 50
         sphere.outerradius = 70
-        var loader = new THREE.TextureLoader();
-        // 
-        loader.load('land_ocean_ice_cloud_2048.jpg', function(texture) {
-            var geometry = new THREE.SphereGeometry(sphere.radius, 64, 64);
-            var material = new THREE.MeshBasicMaterial({
-                map: texture,
-                overdraw: 0.5
-            })
-            var mesh = new THREE.Mesh(geometry, material);
-            mesh.receiveShadow = true
-            mesh.castShadow = false
-            sphere.add(mesh);
-
-
-        });
-
-
-        //       var geometry = new THREE.SphereGeometry( 50, 64, 32 );
-        //  var material = new THREE.MeshPhongMaterial( {color: 0xffff00} );
-        //     var material = new THREE.MeshBasicMaterial( { map: texture, overdraw: 0.5 } );
-        //    sphere = new THREE.Mesh( geometry, material );
         scene.add(sphere);
+
+        // background radius
+        if(true)
+        {
+            var loader = new THREE.TextureLoader();
+            loader.load( 'galaxy_starfield.png', function ( texture ) {
+
+                var geometry  = new THREE.SphereGeometry(spaceradius, 32, 32)
+                // create the material, using a texture of startfield
+                var materialx  = new THREE.MeshBasicMaterial()
+                //material.map   = THREE.ImageUtils.loadTexture() // starfield_background-1024x770.jpg')
+                materialx.side  = THREE.BackSide
+                materialx.map = texture;
+                // create the mesh based on geometry and material
+                var mesh  = new THREE.Mesh(geometry, materialx)
+                //texture.needsUpdate = true;
+                scene.add(mesh)
+            })
+        }
+
+
+        if(false)
+        {
+        /**
+        three.min.js:509 THREE.DirectGeometry.fromGeometry(): Undefined vertexUv2  2197
+         */
+            var loader = new THREE.ColladaLoader();
+            loader.options.convertUpAxis = true;
+            loader.load( 'dstar/dstar.dae', function ( collada ) {
+
+                var dae = collada.scene;
+
+                /*dae.traverse( function ( child ) {
+
+                    if ( child instanceof THREE.SkinnedMesh ) {
+
+                        //var animation = new THREE.Animation( child, child.geometry.animation );
+                        //animation.play();
+
+                    }
+
+                } );
+                */
+                // size before scaling 300 => 30
+                dae.scale.x = dae.scale.y = dae.scale.z = 0.1;
+                dae.updateMatrix();
+                var bbox = new THREE.Box3().setFromObject(dae);
+                var c = bbox.center()
+                dae.position.set(-c.x,-c.y,-c.z)
+                bbox = new THREE.Box3().setFromObject(dae);
+                sphere.add( dae );
+                console.log("bbox is ",bbox.getSize(),bbox)
+
+            } );
+        }
+        else
+        {
+            var loader = new THREE.TextureLoader();
+            // 
+            loader.load('land_ocean_ice_cloud_2048.jpg', function(texture) {
+                var geometry = new THREE.SphereGeometry(sphere.radius, 64, 64);
+                var material = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    overdraw: 0.5
+                })
+                var mesh = new THREE.Mesh(geometry, material);
+                mesh.receiveShadow = true
+                mesh.castShadow = false
+                sphere.add(mesh);
+            });
+        }
 
         // motion is along Z
         //var geometry = new THREE.BoxBufferGeometry(1.0, 1.0, 2.0);
@@ -324,7 +379,7 @@ Thanks to:
 
         var parser = new vox.Parser();
         parser.parse("./tie.vox").then(function(voxelData) {
-            console.log("parsed")
+            //console.log("parsed")
             var param = {
                 voxelSize: 0.1
             };
@@ -340,7 +395,7 @@ Thanks to:
 
 
         // at startup normal and position should be at least not coincident
-        ship.position.set(55, 0, 0)
+        ship.position.set(sphere.radius+10, 0, 0)
         ship.speed = 0.01
         ship.normal = new THREE.Vector3(0, 1, 0)
         ship.radius = 0.1
@@ -354,7 +409,7 @@ Thanks to:
         scene.add(otherships);
 
         parser.parse("./xwing.vox").then(function(voxelData) {
-            console.log("parsed")
+            //console.log("parsed")
             var param = {
                 voxelSize: 0.1
             };
@@ -374,6 +429,8 @@ Thanks to:
             o.dtheta = 0
             o.drho = 0
             o.add(mesh)
+            // compute localsphere
+            o.localsphere = (new THREE.Box3().setFromObject(mesh)).getBoundingSphere()
             otherships.add(o)
         });
 
@@ -479,17 +536,28 @@ Thanks to:
     {
         if(lasttime-lastsent < 300)
                 return
-        var line = new THREE.Mesh( linebase.geometry, linebase.material );
+        var s = 0.2
+        var pp = [
+            [ship.position.x+s*ship.normal.x,ship.position.y+s*ship.normal.y,ship.position.z+s*ship.normal.z],
+            [ship.position.x-s*ship.normal.x,ship.position.y-s*ship.normal.y,ship.position.z-s*ship.normal.z]
+        ]
         lastsent = lasttime
-
-        line.dtheta = 0
-        line.drho = 0
-        line.position.set(ship.position.x,ship.position.y,ship.position.z)
-        line.normal = new THREE.Vector3(ship.normal.x,ship.normal.y,ship.normal.z)
-        line.radius = 0.001
-        line.speed = ship.speed*1.4
-        line.endtime = lasttime + 5000
-        bullets.add(line)
+        for(var i = 0; i < 2; i++)
+        {
+            var line = new THREE.Mesh( linebase.geometry, linebase.material );
+            line.dtheta = 0
+            line.drho = 0
+            line.position.set(pp[i][0],pp[i][1],pp[i][2])
+            line.normal = new THREE.Vector3(ship.normal.x,ship.normal.y,ship.normal.z)
+            line.radius = 0.001
+            line.speed = ship.speed*1.5
+            line.endtime = lasttime + 5000
+            bullets.add(line)
+        }
+        var sound = document.getElementById("fire")
+        sound.pause();
+        sound.currentTime = 0;
+        sound.play()
     }
 
     function onWindowResize() {
@@ -539,7 +607,7 @@ Thanks to:
         var d = body.position.sub(origin);
         var rho = d.length()
         rho += body.drho
-        console.log(rho)
+        //console.log(rho)
         if (rho-body.radius < sphere.radius)
         {
             rho = sphere.radius + body.radius
@@ -626,19 +694,34 @@ Thanks to:
             timer.update(delta);
 
             for(var i = 0; i < otherships.children.length; i++)
+            {
                 updateBody(otherships.children[i], delta)
+            }
             updateBody(ship, delta)
             var tbr = []
             for(var i = 0; i < bullets.children.length; i++)
             {
                 var b = bullets.children[i]
-                if(b.endtime < time)
+                if(b.endtime <= time)
                 {
                     tbr.push(b)
                 }
                 else
                 {
-                    updateBody(b, delta)                    
+                    updateBody(b, delta)       
+                    if(otherships.children.length > 0)
+                    {
+                        // just one
+                        var d = otherships.children[0].localsphere.distanceToPoint((new THREE.Vector3()).subVectors(b.position,otherships.children[0].position)) 
+                        console.log(d)
+                        if(d < 1)
+                        {
+                            tbr.push(b)                        
+                            var sound = document.getElementById("explosion")
+                            if(sound.currentTime == 0)
+                                sound.play()
+                        }
+                    }          
                 }
             }
             for(var i = 0; i < tbr.length; i++)
