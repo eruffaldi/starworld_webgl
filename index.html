@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <title>Merry Christimas 2016</title>
+    <title>Star World 2016</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
     <style>
@@ -263,6 +263,12 @@
             return a[getRandomInt(0, a.length - 1)]
         }
 
+        var material =  new THREE.MeshBasicMaterial( {color: 0x880000} );
+
+        var geometry = new THREE.CylinderBufferGeometry( 0.05,0.05, 1.0, 64 );
+        geometry.rotateX(Math.PI/2)
+        linebase = { material: material, geometry: geometry }
+
         sphere = new THREE.Object3D()
         var loader = new THREE.TextureLoader();
         loader.load('land_ocean_ice_cloud_2048.jpg', function(texture) {
@@ -349,12 +355,29 @@
         renderer.sortObjects = false;
         container.appendChild(renderer.domElement);
 
-        //composer = new THREE.EffectComposer(renderer);
+        composer = new THREE.EffectComposer(renderer);
 
-        //var renderPass = new THREE.RenderPass(scene, camera)
+        var renderPass = new THREE.RenderPass(scene, camera2)
         //renderPass.renderToScreen = true;
-        //composer.addPass(renderPass);
+        composer.addPass(renderPass);
+        bullets = new THREE.Object3D()
+        outlinePass = new THREE.OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera2);
+        //outlinePass.renderToScreen = true
+        outlinePass.selectedObjects = []
+        outlinePass.edgeGlow = 0.8
+        outlinePass.visibleEdgeColor.r = 1.0
+        outlinePass.visibleEdgeColor.g = 0.0
+        outlinePass.visibleEdgeColor.b = 0.0
+        outlinePass.pulsePeriod = 0
+        outlinePass.edgeThickness = 1
+            // default white
+        composer.addPass(outlinePass);
 
+        var final = new THREE.ShaderPass(THREE.CopyShader);
+        final.renderToScreen = true;
+        composer.addPass(final);
+
+        scene.add(bullets)
         stats = new Stats();
         container.appendChild(stats.dom);
 
@@ -366,12 +389,54 @@
             container: container,
             mouseSupport: true,
         });
-        joystick.addEventListener('touchStart', function() {
+        joystick.addEventListener('touchStartValidation', function(event){
+            var touch   = event.changedTouches[0];
+            if( touch.pageX < window.innerWidth/2 ) return false;
+            return true
+        });
+        //joystick.addEventListener('touchStart', function() {
+        //joystick.addEventListener('touchEnd', function() {})
 
+        joystick2    = new VirtualJoystick({
+            container   : document.body,
+            strokeStyle : 'orange',
+            limitStickTravel: true,
+            stickRadius : 0     
+        });
+        joystick2.addEventListener('touchStartValidation', function(event){
+            var touch   = event.changedTouches[0];
+            if( touch.pageX >= window.innerWidth/2 )    return false;
+            return true
+        });
+        joystick2.addEventListener('touchStart', function() {
+            fireShip()
         })
-        joystick.addEventListener('touchEnd', function() {})
 
+        function onKeyUpFire(event)
+        {
+            if( event.code == "KeyF")
+                fireShip()
 
+        }
+
+        document.addEventListener("keyup", onKeyUpFire, false);
+    }
+
+        var lastsent
+    function fireShip()
+    {
+        if(lasttime-lastsent < 300)
+                return
+        var line = new THREE.Mesh( linebase.geometry, linebase.material );
+        lastsent = lasttime
+
+        line.dtheta = 0
+        line.drho = 0
+        line.position.set(ship.position.x,ship.position.y,ship.position.z)
+        line.normal = new THREE.Vector3(ship.normal.x,ship.normal.y,ship.normal.z)
+        line.speed = ship.speed*1.4
+        line.endtime = lasttime + 5000
+        bullets.add(line)
     }
 
     function onWindowResize() {
@@ -386,7 +451,7 @@
         camera2.updateProjectionMatrix();
 
         renderer.setSize(width, height);
-        //composer.setSize(width, height);
+        composer.setSize(width, height);
 
     }
 
@@ -428,22 +493,24 @@
         frame.multiply(m)
 
 
+
         // stored by column => extract X == rho
         body.position.set(origin.x + frame.elements[0] * rho, origin.y + frame.elements[1] * rho, origin.x + frame.elements[2] * rho)
+        if (body.mesh) {
+            body.mesh.quaternion.set(0, 0, 0, 1)
+            if (body.dtheta != 0) {
+                body.mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), (body.dtheta > 0 ? 1.0 : -1.0) * Math.PI / 4)
+            }
+            if(body.drho != 0)
+            {
+                body.mesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), (body.drho > 0 ? 1.0 : -1.0) * Math.PI / 6)                
+            }
+        }
 
         if (body.dtheta != 0) {
             // rotate along X by the given angle
             m.makeRotationX(body.dtheta * dt);
             frame.multiply(m)
-            if (body.mesh) {
-                body.mesh.quaternion.set(0, 0, 0, 1)
-                body.mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), (body.dtheta > 0 ? 1.0 : -1.0) * Math.PI / 4)
-            }
-        } else {
-            if (body.mesh) {
-                body.mesh.quaternion.set(0, 0, 0, 1)
-            }
-
         }
 
         // stored by column => extract Y == normal
@@ -476,6 +543,11 @@
         } else if (joystick.left()) {
             ship.dtheta = dtheta
         }
+        if (joystick.up()) {
+            ship.drho = -drho
+        } else if (joystick.down()) {
+            ship.drho = drho
+        }
 
         //                    + ' dy:'+joystick.deltaY()
 
@@ -492,15 +564,30 @@
             timer.update(delta);
 
             updateBody(ship, delta)
-
+            var tbr = []
+            for(var i = 0; i < bullets.children.length; i++)
+            {
+                var b = bullets.children[i]
+                if(b.endtime < time)
+                {
+                    tbr.push(b)
+                }
+                else
+                {
+                    updateBody(b, delta)                    
+                }
+            }
+            for(var i = 0; i < tbr.length; i++)
+                bullets.remove(tbr[i])
+            outlinePass.selectedObjects = bullets.children
         }
         lasttime = time
     }
 
     function render() {
-        //composer.render();
-        renderer.clear();
-        renderer.render(scene, camera2);
+        composer.render();
+        //renderer.clear();
+        //renderer.render(scene, camera2);
     }
     </script>
 </body>
