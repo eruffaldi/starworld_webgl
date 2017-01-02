@@ -16,6 +16,12 @@
 </head>
 
 <body>
+<!--
+Thanks to:
+- http://learningthreejs.com/blog/2013/09/16/how-to-make-the-earth-in-webgl/
+- https://blog.sketchfab.com/tutorial-creating-a-3d-star-wars-scene-in-voxels-using-magicavoxel-blender-and-voxelshop/
+- https://github.com/jeromeetienne/threex.planets
+-->
     <script src="three.min.js"></script>
     <script src="DragControls.js"></script>
     <script src="CCapture.all.min.js"></script>
@@ -269,10 +275,22 @@
         geometry.rotateX(Math.PI/2)
         linebase = { material: material, geometry: geometry }
 
+        var geometry  = new THREE.SphereGeometry(200, 32, 32)
+        // create the material, using a texture of startfield
+        var material  = new THREE.MeshBasicMaterial()
+        material.map   = THREE.ImageUtils.loadTexture('galaxy_starfield.png') // starfield_background-1024x770.jpg')
+        material.side  = THREE.BackSide
+        // create the mesh based on geometry and material
+        var mesh  = new THREE.Mesh(geometry, material)
+        scene.add(mesh)
+
         sphere = new THREE.Object3D()
+        sphere.radius = 50
+        sphere.outerradius = 70
         var loader = new THREE.TextureLoader();
+        // 
         loader.load('land_ocean_ice_cloud_2048.jpg', function(texture) {
-            var geometry = new THREE.SphereGeometry(50, 64, 64);
+            var geometry = new THREE.SphereGeometry(sphere.radius, 64, 64);
             var material = new THREE.MeshBasicMaterial({
                 map: texture,
                 overdraw: 0.5
@@ -297,6 +315,12 @@
         //geometry.computeBoundingBox();
         //geometry.center();
 
+        ship = new THREE.Object3D()
+        shipfix = new THREE.Object3D()
+        shipfix.rotateOnAxis(new THREE.Vector3(0, 0, 1), -Math.PI / 2)
+
+        models = {}
+
         var parser = new vox.Parser();
         parser.parse("./tie.vox").then(function(voxelData) {
             console.log("parsed")
@@ -308,24 +332,51 @@
             //       var material = new THREE.MeshPhongMaterial( {color: 0x0000ff} );
             mesh.castShadow = true;
             mesh.receiveShadow = false
+            models["tie"] = mesh
             ship.mesh = mesh
             shipfix.add(mesh)
         });
 
 
-        ship = new THREE.Object3D()
-        shipfix = new THREE.Object3D()
-        shipfix.rotateOnAxis(new THREE.Vector3(0, 0, 1), -Math.PI / 2)
-
         // at startup normal and position should be at least not coincident
         ship.position.set(55, 0, 0)
         ship.speed = 0.01
         ship.normal = new THREE.Vector3(0, 1, 0)
+        ship.radius = 0.1
         ship.dtheta = 0
         ship.drho = 0
         ship.add(shipfix)
         shipfix.add(camera2);
         scene.add(ship);
+
+        otherships = new THREE.Object3D()
+        scene.add(otherships);
+
+        parser.parse("./xwing.vox").then(function(voxelData) {
+            console.log("parsed")
+            var param = {
+                voxelSize: 0.1
+            };
+            var builder = new vox.MeshBuilder(voxelData, param);
+            var mesh = builder.createMesh();
+            //       var material = new THREE.MeshPhongMaterial( {color: 0x0000ff} );
+            mesh.castShadow = true;
+            mesh.receiveShadow = false
+            mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), Math.PI / 2)
+            models["xwing"] = mesh
+            // spawn
+            var o = new THREE.Object3D()
+            o.position.set(55, 20, 0)
+            o.speed = 0.001
+            o.normal = new THREE.Vector3(0, 1, 0)
+            o.radius = 0.1
+            o.dtheta = 0
+            o.drho = 0
+            o.add(mesh)
+            otherships.add(o)
+        });
+
+
 
         var objects = []
             //console.log(cmds)
@@ -434,6 +485,7 @@
         line.drho = 0
         line.position.set(ship.position.x,ship.position.y,ship.position.z)
         line.normal = new THREE.Vector3(ship.normal.x,ship.normal.y,ship.normal.z)
+        line.radius = 0.001
         line.speed = ship.speed*1.4
         line.endtime = lasttime + 5000
         bullets.add(line)
@@ -486,6 +538,15 @@
         var d = body.position.sub(origin);
         var rho = d.length()
         rho += body.drho
+        console.log(rho)
+        if (rho-body.radius < sphere.radius)
+        {
+            rho = sphere.radius + body.radius
+        }
+        else if(rho > sphere.outerradius)
+        {
+            rho = sphere.outerradius
+        }
         d.normalize()
         var frame = makeframe(d, body.normal); // X r, Y body => Z new
         var m = new THREE.Matrix4()
@@ -563,6 +624,8 @@
             delta = time - lasttime
             timer.update(delta);
 
+            for(var i = 0; i < otherships.children.length; i++)
+                updateBody(otherships.children[i], delta)
             updateBody(ship, delta)
             var tbr = []
             for(var i = 0; i < bullets.children.length; i++)
