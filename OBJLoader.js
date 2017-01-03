@@ -45,8 +45,15 @@ THREE.OBJLoader.prototype = {
 
 		var loader = new THREE.FileLoader( scope.manager );
 		loader.setPath( this.path );
+		loader.gzip = url.endsWith(".gz")
+		if(loader.gzip)
+			loader.setResponseType("arraybuffer")
 		loader.load( url, function ( text ) {
 
+			if(loader.gzip)
+			{
+				text = window.pako.inflate(text,{to:'string'})
+			}
 			onLoad( scope.parse( text ) );
 
 		}, onProgress, onError );

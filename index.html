@@ -49,6 +49,7 @@ Thanks to:
     <script src="KeyboardState.js"></script>
     <script src="ColladaLoader.js"></script>
     <script src="MTLLoader.js"></script>
+    <script src="pako.min.js"></script>
     <script src="OBJLoader.js"></script>
     <script src="stats.min.js"></script>
     <script>
@@ -367,7 +368,7 @@ Thanks to:
             var loader = new THREE.OBJLoader();
             loader.setMaterials( materials );
             loader.setPath( 'dstar2/' );
-            loader.load( 'f0d96549c0a3410d95b1f042721d94f3.obj', function ( obj ) {
+            loader.load( 'f0d96549c0a3410d95b1f042721d94f3.obj.gz', function ( obj ) {
 
 
                 /*dae.traverse( function ( child ) {
@@ -448,7 +449,7 @@ Thanks to:
         shipfix.add(camera2);
 
 
-        
+
         var light = new THREE.SpotLight(0xffffff, 1);
         light.position.set(0, 0, 0)
         light.castShadow = true
@@ -668,8 +669,6 @@ Thanks to:
         var d = body.position.sub(origin);
         var rho = d.length()
         rho += body.drho
-        if(body == ship)
-            console.log(rho)
         if (rho-body.radius < sphere.minradius)
         {
             rho = sphere.radius + body.radius
