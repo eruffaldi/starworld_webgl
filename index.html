@@ -58,6 +58,7 @@ TODO:
     <script src="VREffect.js"></script>
     <script src="VRControls.js"></script>
     <script src="webvr-polyfill.min.js"></script>
+    <script src="WebVR.js"></script>
     <script src="KeyboardState.js"></script>
     <script src="ColladaLoader.js"></script>
     <script src="MTLLoader.js"></script>
@@ -610,8 +611,9 @@ TODO:
                             .catch( function () {
                                 // no displays
                             } );
-                        document.body.appendChild( WEBVR.getButton( vreffect ) );
                     }
+            if ( WEBVR.isAvailable() === true ) 
+        document.body.appendChild( WEBVR.getButton( vreffect ))
 
         }
         else    
