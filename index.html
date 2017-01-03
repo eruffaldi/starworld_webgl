@@ -55,6 +55,9 @@ TODO:
     <script src="RenderPass.js"></script>
     <script src="Timer.js"></script>
     <script src="StereoEffect.js"></script>
+    <script src="VREffect.js"></script>
+    <script src="VRControls.js"></script>
+    <script src="webvr-polyfill.min.js"></script>
     <script src="KeyboardState.js"></script>
     <script src="ColladaLoader.js"></script>
     <script src="MTLLoader.js"></script>
@@ -225,6 +228,7 @@ TODO:
 
         var myself = parseURL(window.location.href)
         var stereomode = myself.searchObject["stereo"] || 0
+        var vrmode = myself.searchObject["vr"] || 0
 
         container = document.createElement('div');
         document.body.appendChild(container);
@@ -591,6 +595,26 @@ TODO:
             stereoeffect = new THREE.StereoEffect(renderer);
         else
             stereoeffect = undefined
+        if(vrmode)
+        {
+            vrcontrols = new THREE.VRControls( camera2 );
+            vreffect = new THREE.VREffect(renderer)
+            if ( navigator.getVRDisplays ) {
+                        navigator.getVRDisplays()
+                            .then( function ( displays ) {
+                                effect.setVRDisplay( displays[ 0 ] );
+                                vrcontrols.setVRDisplay( displays[ 0 ] );
+                            } )
+                            .catch( function () {
+                                // no displays
+                            } );
+                        //document.body.appendChild( WEBVR.getButton( effect ) );
+                    }
+
+        }
+        else    
+            vreffect = undefined
+
 
         var final = new THREE.ShaderPass(THREE.CopyShader);
         final.renderToScreen = true;
@@ -701,6 +725,8 @@ TODO:
         composer.setSize(width, height);
         if(stereoeffect)
         stereoeffect.setSize(width, height);
+        if(vreffect)
+        vreffect.setSize(width, height);
 
 
     }
@@ -811,7 +837,10 @@ TODO:
 
         //                    + ' dy:'+joystick.deltaY()
 
-        requestAnimationFrame(animate);
+        if(vreffect)
+            vreffect.requestAnimationFrame( animate );
+        else
+            requestAnimationFrame(animate);
 
         capturer.capture(renderer.domElement);
         render();
@@ -881,6 +910,11 @@ TODO:
         //composer.render();
         if(stereoeffect)
             stereoeffect.render(scene,camera2)
+        else if(vreffect)
+        {
+            vrcontrols.update()
+            vreffect.render(scene,camera2)
+        }
         else
             composer.render()
         //renderer.clear();
