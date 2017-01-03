@@ -274,10 +274,8 @@ TODO:
         camera.position.z = 1000;
 
         camera2 = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1.0, farside);
-        camera2.position.z = 15;
-        camera2.position.y = 6;
         camera2.up = new THREE.Vector3(0, 1, 0);
-        camera2.lookAt(new THREE.Vector3(0, 0, 0));
+        camera2.lookAt(new THREE.Vector3(0, 0, -1));
         activecamera = camera2
         //camera2.rotateOnAxis(new THREE.Vector3(1,0,0),-0.4) //-Math.PI/3)
 
@@ -494,7 +492,11 @@ TODO:
         ship.dtheta = 0
         ship.drho = 0
         ship.add(shipfix)
-        shipfix.add(camera2);
+        var camera2holder = new THREE.Object3D()
+        camera2holder.position.z = 15;
+        camera2holder.position.y = 6;
+        shipfix.add(camera2holder)
+        camera2holder.add(camera2);
 
 
 
