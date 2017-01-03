@@ -1,0 +1,11 @@
+# File produced by Open Asset Import Library (http://www.assimp.sf.net)
+# (assimp v3.0.1270)
+
+newmtl 03___Default
+kd 1 1 1
+ka 1 1 1
+ks 0.9 0.9 0.9
+d 1
+illum 0
+map_kd f0d96549c0a3410d95b1f042721d94f3.png
+

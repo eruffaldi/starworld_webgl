@@ -48,6 +48,8 @@ Thanks to:
     <script src="Timer.js"></script>
     <script src="KeyboardState.js"></script>
     <script src="ColladaLoader.js"></script>
+    <script src="MTLLoader.js"></script>
+    <script src="OBJLoader.js"></script>
     <script src="stats.min.js"></script>
     <script>
     THREE.ShaderTypes = {
@@ -234,6 +236,7 @@ Thanks to:
         camera2.position.y = 3;
         camera2.up = new THREE.Vector3(0, 1, 0);
         camera2.lookAt(new THREE.Vector3(0, 0, 0));
+        activecamera = camera2
         //camera2.rotateOnAxis(new THREE.Vector3(1,0,0),-0.4) //-Math.PI/3)
 
         controls = new THREE.TrackballControls(camera);
@@ -263,18 +266,6 @@ Thanks to:
         light.shadow.camera.near = 1;
         light.shadow.camera.far = 100;
 
-        scene.add(light);
-
-        var light = new THREE.SpotLight(0xffffff, 1);
-        light.position.set(-180, 80, 0)
-        light.castShadow = true
-        light.angle = Math.PI / 4;
-        light.shadow.mapSize.width = 1024;
-        light.shadow.mapSize.height = 1024;
-        light.shadow.camera.near = 1;
-        light.shadow.camera.far = 100;
-        scene.add(light);
-
         function getRandomInt(min, max) {
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
@@ -291,10 +282,24 @@ Thanks to:
             linebase = { material: material, geometry: geometry }
         }
 
+        /*
+         DS1 is 70km radius => 440km equator
+         Tie is sized 7-8m  
+         100 MGLT/hour = 1200 km/h ==> 3 loops/h
+         
+         sphereradius=40u
+         1u=10km
+         1200km/h = 120u/h = 0.0333u/s
+         */
+
         var spaceradius = 200
+        var sphereradius = 40
+        var shipspeed = 2*Math.PI*sphereradius/30 // one loop every 30 seconds
+
         sphere = new THREE.Object3D()
-        sphere.radius = 50
-        sphere.outerradius = 70
+        sphere.radius = sphereradius
+        sphere.maxradius = sphereradius*2
+        sphere.minradius = sphereradius*0.95
         scene.add(sphere);
 
         // background radius
@@ -322,7 +327,7 @@ Thanks to:
         /**
         three.min.js:509 THREE.DirectGeometry.fromGeometry(): Undefined vertexUv2  2197
          */
-            var loader = new THREE.ColladaLoader();
+            var loader = new THREE.OBJLoader();
             loader.options.convertUpAxis = true;
             loader.load( 'dstar/dstar.dae', function ( collada ) {
 
@@ -351,6 +356,42 @@ Thanks to:
 
             } );
         }
+        else if(true)
+        {
+        /**
+        three.min.js:509 THREE.DirectGeometry.fromGeometry(): Undefined vertexUv2  2197
+         */
+         var mtlLoader = new THREE.MTLLoader();
+        mtlLoader.setPath( 'dstar2/' );
+        mtlLoader.load( 'deathstar.mtl', function( materials ) {
+            var loader = new THREE.OBJLoader();
+            loader.setMaterials( materials );
+            loader.setPath( 'dstar2/' );
+            loader.load( 'f0d96549c0a3410d95b1f042721d94f3.obj', function ( obj ) {
+
+
+                /*dae.traverse( function ( child ) {
+
+                    if ( child instanceof THREE.SkinnedMesh ) {
+
+                        //var animation = new THREE.Animation( child, child.geometry.animation );
+                        //animation.play();
+
+                    }
+
+                } );
+                */
+                // size before scaling 300 => 30
+                obj.scale.x = obj.scale.y = obj.scale.z = 0.2; // 400 => 40
+                obj.updateMatrix();
+                var bbox = new THREE.Box3().setFromObject(obj);
+                sphere.add( obj );
+                console.log("bbox is ",bbox.getSize(),bbox)
+
+            } );
+
+            });
+        }        
         else
         {
             var loader = new THREE.TextureLoader();
@@ -397,14 +438,27 @@ Thanks to:
 
 
         // at startup normal and position should be at least not coincident
-        ship.position.set(sphere.radius+10, 0, 0)
-        ship.speed = 0.01
+        ship.position.set(sphere.radius*1.05, 0, 0)
+        ship.speed = shipspeed
         ship.normal = new THREE.Vector3(0, 1, 0)
         ship.radius = 0.1
         ship.dtheta = 0
         ship.drho = 0
         ship.add(shipfix)
         shipfix.add(camera2);
+
+
+        
+        var light = new THREE.SpotLight(0xffffff, 1);
+        light.position.set(0, 0, 0)
+        light.castShadow = true
+        light.angle = Math.PI / 2;
+        light.shadow.mapSize.width = 1024;
+        light.shadow.mapSize.height = 1024;
+        light.shadow.camera.near = 1;
+        light.shadow.camera.far = 100;
+        camera2.add(light);
+
         scene.add(ship);
 
         otherships = new THREE.Object3D()
@@ -420,12 +474,13 @@ Thanks to:
             //       var material = new THREE.MeshPhongMaterial( {color: 0x0000ff} );
             mesh.castShadow = true;
             mesh.receiveShadow = false
-            mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), Math.PI / 2)
+            mesh.rotateOnAxis(new THREE.Vector3(0, 0, 1), -Math.PI / 2)
+            mesh.rotateOnAxis(new THREE.Vector3(0, 1, 0), Math.PI)
             models["xwing"] = mesh
             // spawn
             var o = new THREE.Object3D()
-            o.position.set(55, 20, 0)
-            o.speed = 0.001
+            o.position.set(sphere.radius*1.02, 20, 0)
+            o.speed = shipspeed*0.5
             o.normal = new THREE.Vector3(0, 1, 0)
             o.radius = 0.1
             o.dtheta = 0
@@ -468,11 +523,11 @@ Thanks to:
 
         composer = new THREE.EffectComposer(renderer);
 
-        var renderPass = new THREE.RenderPass(scene, camera2)
+        var renderPass = new THREE.RenderPass(scene, activecamera)
         //renderPass.renderToScreen = true;
         composer.addPass(renderPass);
         bullets = new THREE.Object3D()
-        outlinePass = new THREE.OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera2);
+         outlinePass = new THREE.OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, activecamera);
         //outlinePass.renderToScreen = true
         outlinePass.selectedObjects = []
         outlinePass.edgeGlow = 0.8
@@ -527,6 +582,10 @@ Thanks to:
         {
             if( event.code == "Space")
                 fireShip()
+            else if(event.code == "Key2")
+            {
+                // ?
+            }
 
         }
 
@@ -609,19 +668,20 @@ Thanks to:
         var d = body.position.sub(origin);
         var rho = d.length()
         rho += body.drho
-        //console.log(rho)
-        if (rho-body.radius < sphere.radius)
+        if(body == ship)
+            console.log(rho)
+        if (rho-body.radius < sphere.minradius)
         {
             rho = sphere.radius + body.radius
         }
-        else if(rho > sphere.outerradius)
+        else if(rho > sphere.maxradius)
         {
-            rho = sphere.outerradius
+            rho = sphere.maxradius
         }
         d.normalize()
         var frame = makeframe(d, body.normal); // X r, Y body => Z new
         var m = new THREE.Matrix4()
-        m.makeRotationY(dt * body.speed / rho);
+        m.makeRotationY(dt/1000.0 * body.speed / rho); // dt in ms, body.speed in u/s
         frame.multiply(m)
 
 
@@ -657,6 +717,7 @@ Thanks to:
         var drho = 0.02
         ship.dtheta = 0.0
         ship.drho = 0.0
+
         if (keyboard.pressed("A")) {
             ship.dtheta = dtheta
         } else if (keyboard.pressed("S")) {
@@ -715,7 +776,6 @@ Thanks to:
                     {
                         // just one
                         var d = otherships.children[0].localsphere.distanceToPoint((new THREE.Vector3()).subVectors(b.position,otherships.children[0].position)) 
-                        console.log(d)
                         if(d < 1)
                         {
                             tbr.push(b)                        
